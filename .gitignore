@@ -1,0 +1,41 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Logs (generated at runtime — don't commit)
+logs/*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Pytest
+.pytest_cache/
+.coverage
+
+# Environment variables
+.env
+*.env
+
+# Docker
+*.tar
+
+# Streamlit
+.streamlit/
+
+# SQLite database
+data/
+*.db

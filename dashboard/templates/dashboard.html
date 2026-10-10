@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin Dashboard - Emergency Alert Monitor</title>
+  <meta name="description" content="Backend reliability dashboard for the Emergency Alert Monitor system. Monitors database errors, broadcast failures, and notification delays in real time.">
+  <link rel="stylesheet" href="{{ url_for('dashboard.static', filename='dashboard.css') }}">
+</head>
+<body>
+<noscript>
+  <div style="background:#1a2340;color:#e6ebff;padding:28px;text-align:center;border:1px solid #222c48;border-radius:14px;margin:40px auto;max-width:600px;font-family:system-ui,sans-serif;">
+    <strong>JavaScript required.</strong><br>
+    The admin dashboard needs JavaScript to poll for live metrics.<br>
+    Please enable JavaScript and reload this page.
+  </div>
+</noscript>
+
+{% set s = data.status|default("NORMAL") %}
+{% set sev = data.severity|default("NONE") %}
+{% set m = data.metrics|default({}) %}
+{% set th = data.thresholds|default({}) %}
+
+<div class="shell">
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       1. HEADER
+       ════════════════════════════════════════════════════════════════════ -->
+  <header class="header">
+    <div class="header-left">
+      <h1>Emergency Alert Monitor</h1>
+      <div class="subtitle">Backend reliability watchdog - Group 4</div>
+    </div>
+    <div class="header-right">
+      <div id="db-pill" class="pill db-pill{{ ' sim-failure pulse' if data.db_status == 'SIMULATED_FAILURE' else '' }}">
+        <span class="db-dot"></span>
+        <span id="db-text">
+          {%- if data.db_status == 'SIMULATED_FAILURE' -%}
+            Database: simulated failure ({{ data.db_failure_seconds_remaining }}s left)
+          {%- else -%}
+            Database online
+          {%- endif -%}
+        </span>
+      </div>
+      <div id="live-pill" class="live-pill">
+        <span class="live-dot pulse"></span>
+        <span id="live-text">Live</span>
+        <span id="live-ago" class="tabular">updated 0s ago</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       2. HERO STATUS CARD
+       ════════════════════════════════════════════════════════════════════ -->
+  <div id="hero" class="card hero" data-status="{{ s }}">
+    <div id="hero-dot" class="hero-dot{{ ' pulse' if s != 'NORMAL' else '' }}"></div>
+    <div class="hero-body">
+      <div id="hero-status" class="hero-status">
+        {%- if s == "ANOMALY" %}ANOMALY DETECTED{% else %}{{ s }}{% endif -%}
+      </div>
+      <div id="hero-reason" class="hero-reason">{{ data.reason|default("All systems operating normally.")|e }}</div>
+      <div class="hero-meta">
+        <span id="sev-badge" class="badge {% if sev in ('HIGH','CRITICAL') %}badge-bad{% elif sev in ('MEDIUM','WARNING') %}badge-warn{% elif sev == 'LOW' %}badge-ok{% else %}badge-muted{% endif %}">{{ sev }}</span>
+        <span class="hero-window">last {{ data.window_seconds|default(60) }} seconds</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       3. ADMINISTRATOR ALERT PANEL (only visible during ANOMALY)
+       ════════════════════════════════════════════════════════════════════ -->
+  <div id="admin-alert" class="card admin-alert{{ ' visible' if s == 'ANOMALY' and data.anomalies|default([])|length > 0 else '' }}">
+    <div class="admin-alert-header">
+      <!-- Inline SVG alert/siren icon -->
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--bad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+      <span class="admin-alert-title">Administrator alert</span>
+    </div>
+    {% if data.anomalies|default([])|length > 0 %}
+    <div id="alert-type" class="admin-alert-detail">{{ data.anomalies[0].type|default("Anomaly")|e }}</div>
+    <div id="alert-detail" class="admin-alert-detail">{{ data.anomalies[0].reason|default("")|e }}</div>
+    {% else %}
+    <div id="alert-type" class="admin-alert-detail"></div>
+    <div id="alert-detail" class="admin-alert-detail"></div>
+    {% endif %}
+    <div class="admin-alert-impact">Possible impact: Emergency notification delivery may be affected.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       4. METRIC CARDS (4x2 grid)
+       ════════════════════════════════════════════════════════════════════ -->
+  <div class="metrics-grid">
+
+    <div id="m-requests" class="card metric-card" data-level="">
+      <div class="metric-value tabular">{{ m.total_requests|default(0) }}</div>
+      <div class="metric-label">Total requests</div>
+      <div class="metric-hint">&nbsp;</div>
+    </div>
+
+    <div id="m-errors" class="card metric-card" data-level="{{ 'bad' if m.error_count|default(0) >= th.get('error_count',{}).get('anomaly_min',50) else ('warn' if m.error_count|default(0) > th.get('error_count',{}).get('normal_max',10) else '') }}">
+      <div class="metric-value tabular">{{ m.error_count|default(0) }}</div>
+      <div class="metric-label">Total errors</div>
+      <div class="metric-hint">limit {{ th.get('error_count',{}).get('anomaly_min','--') }}</div>
+    </div>
+
+    <div id="m-warnings" class="card metric-card" data-level="{{ 'bad' if m.warning_count|default(0) >= th.get('warning_count',{}).get('anomaly_min',60) else ('warn' if m.warning_count|default(0) > th.get('warning_count',{}).get('normal_max',15) else '') }}">
+      <div class="metric-value tabular">{{ m.warning_count|default(0) }}</div>
+      <div class="metric-label">Total warnings</div>
+      <div class="metric-hint">limit {{ th.get('warning_count',{}).get('anomaly_min','--') }}</div>
+    </div>
+
+    <div id="m-db" class="card metric-card" data-level="{{ 'bad' if m.database_error_count|default(0) >= th.get('database_error_count',{}).get('anomaly_min',20) else ('warn' if m.database_error_count|default(0) > th.get('database_error_count',{}).get('normal_max',5) else '') }}">
+      <div class="metric-value tabular">{{ m.database_error_count|default(0) }}</div>
+      <div class="metric-label">Database errors</div>
+      <div class="metric-hint">limit {{ th.get('database_error_count',{}).get('anomaly_min','--') }}</div>
+    </div>
+
+    <div id="m-broadcast" class="card metric-card" data-level="{{ 'bad' if m.broadcast_failure_count|default(0) >= th.get('broadcast_failure_count',{}).get('anomaly_min',10) else ('warn' if m.broadcast_failure_count|default(0) > th.get('broadcast_failure_count',{}).get('normal_max',2) else '') }}">
+      <div class="metric-value tabular">{{ m.broadcast_failure_count|default(0) }}</div>
+      <div class="metric-label">Broadcast failures</div>
+      <div class="metric-hint">limit {{ th.get('broadcast_failure_count',{}).get('anomaly_min','--') }}</div>
+    </div>
+
+    <div id="m-notif" class="card metric-card" data-level="{{ 'bad' if m.notification_delay_count|default(0) >= th.get('notification_delay_count',{}).get('anomaly_min',20) else ('warn' if m.notification_delay_count|default(0) > th.get('notification_delay_count',{}).get('normal_max',5) else '') }}">
+      <div class="metric-value tabular">{{ m.notification_delay_count|default(0) }}</div>
+      <div class="metric-label">Notification delays</div>
+      <div class="metric-hint">limit {{ th.get('notification_delay_count',{}).get('anomaly_min','--') }}</div>
+    </div>
+
+    <div id="m-rt" class="card metric-card" data-level="">
+      <div class="metric-value tabular">{{ m.average_response_time_ms|default(0) }} ms</div>
+      <div class="metric-label">Avg response time</div>
+      <div class="metric-hint">&nbsp;</div>
+    </div>
+
+    <div id="m-anomalies" class="card metric-card" data-level="{{ 'bad' if data.anomaly_count|default(0) > 0 else '' }}">
+      <div class="metric-value tabular">{{ data.anomaly_count|default(0) }}</div>
+      <div class="metric-label">Anomalies detected</div>
+      <div class="metric-hint">&nbsp;</div>
+    </div>
+
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       5. TREND CARD
+       ════════════════════════════════════════════════════════════════════ -->
+  <div class="card trend-card">
+    <div class="card-title">Errors over time</div>
+    <div id="trend-chart" class="trend-chart-wrap">
+      {% if data.trend|default([])|length >= 2 %}
+        <!-- JS will render the SVG chart here on first poll -->
+      {% else %}
+        <div class="trend-empty">Collecting data -- chart will appear shortly.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       6. TWO TABLES SIDE-BY-SIDE
+       ════════════════════════════════════════════════════════════════════ -->
+  <div class="tables-row">
+
+    <!-- Recent logs -->
+    <div class="card">
+      <div class="card-title">Recent logs</div>
+      <table class="log-table">
+        <thead>
+          <tr><th>Time</th><th>Level</th><th>Message</th></tr>
+        </thead>
+        <tbody id="log-body">
+          {% for log in data.recent_logs|default([]) %}
+          <tr>
+            <td class="tabular">{{ log.timestamp|e }}</td>
+            <td>
+              <span class="lvl lvl-{{ log.level|lower }}">{{ log.level|e }}</span>
+            </td>
+            <td class="msg">{{ log.message|e }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3" class="empty-state">No log entries yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Recent anomalies -->
+    <div class="card">
+      <div class="card-title">Recent anomalies</div>
+      <table class="anomaly-table">
+        <thead>
+          <tr><th>Time</th><th>Type</th><th>Reason</th><th>Severity</th></tr>
+        </thead>
+        <tbody id="anomaly-body">
+          {% for a in data.anomalies|default([]) %}
+          <tr>
+            <td class="tabular">{{ a.timestamp|e }}</td>
+            <td>{{ a.type|e }}</td>
+            <td>{{ a.reason|e }}</td>
+            <td>
+              <span class="badge {% if a.severity|upper in ('HIGH','CRITICAL') %}badge-bad{% elif a.severity|upper in ('MEDIUM','WARNING') %}badge-warn{% else %}badge-ok{% endif %}">
+                {{ a.severity|e }}
+              </span>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="empty-state">No anomalies detected -- system operating normally.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       6b. ALERT HISTORY (STORED IN SQLITE)
+       ════════════════════════════════════════════════════════════════════ -->
+  <div class="card alert-history-card">
+    <div class="card-header-flex">
+      <div class="card-title">Alert history (stored in SQLite)</div>
+      <div class="card-badge">Stored alerts: <span id="stored-alert-count" class="tabular">{{ data.stored_alert_count|default(0) }}</span></div>
+    </div>
+    <div class="table-wrap">
+      <table class="alert-table">
+        <thead>
+          <tr><th>Time</th><th>ID</th><th>Type</th><th>Location</th><th>Status</th></tr>
+        </thead>
+        <tbody id="alert-body">
+          {% for alert in data.recent_alerts|default([]) %}
+          <tr>
+            <td class="tabular">{{ alert.created_at|e }}</td>
+            <td class="tabular font-mono">{{ alert.id|e }}</td>
+            <td><span class="badge badge-info">{{ alert.type|e }}</span></td>
+            <td>{{ alert.location|e }}</td>
+            <td><span class="badge badge-ok">{{ alert.status|e }}</span></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="empty-state">No alerts stored yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       7. FOOTER
+       ════════════════════════════════════════════════════════════════════ -->
+  <footer class="footer">
+    This dashboard monitors the health of the backend. It does not detect emergencies or disasters.<br>
+    Aligned with SDG 11
+  </footer>
+
+</div>
+
+<script src="{{ url_for('dashboard.static', filename='dashboard.js') }}"></script>
+</body>
+</html>

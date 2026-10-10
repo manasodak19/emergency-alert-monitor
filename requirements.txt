@@ -1,0 +1,12 @@
+# Core web framework
+flask==3.0.3
+
+# For Phase 9 (optional ML anomaly detection)
+scikit-learn==1.5.1
+numpy==1.26.4
+
+# For Phase 7 (admin dashboard)
+streamlit==1.37.1
+
+# For testing (Phase 8)
+pytest==8.3.2
