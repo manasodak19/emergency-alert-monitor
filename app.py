@@ -1,5 +1,6 @@
 # pyrefly: ignore [missing-import]
 from flask import Flask, request, jsonify
+import os
 import uuid
 import time
 import sqlite3
@@ -167,6 +168,14 @@ BANNER = r"""
 # ─── Run ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    host = os.environ.get("FLASK_RUN_HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", os.environ.get("FLASK_RUN_PORT", "5000")))
+    debug_val = os.environ.get("FLASK_DEBUG")
+    if debug_val is not None:
+        debug_mode = debug_val.lower() in ("1", "true", "yes")
+    else:
+        debug_mode = True
+
     print(BANNER)
-    write_log("INFO", "Emergency Alert Monitor starting up")
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    write_log("INFO", f"Emergency Alert Monitor starting up on {host}:{port} (debug={debug_mode})")
+    app.run(debug=debug_mode, host=host, port=port)

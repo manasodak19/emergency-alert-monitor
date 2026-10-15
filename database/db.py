@@ -249,3 +249,26 @@ def count_anomalies(db_path: Optional[str] = None) -> int:
         cursor.execute("SELECT COUNT(*) FROM anomalies")
         row = cursor.fetchone()
         return row[0] if row else 0
+
+
+if __name__ == "__main__":
+    db_file = get_db_path()
+    print(f"\n=== SQLite Database: {db_file} ===")
+    if not os.path.isfile(db_file):
+        print("Database file does not exist yet. Run the app to initialize it.")
+    else:
+        alerts = get_recent_alerts(limit=20)
+        print(f"\n--- Table: alerts ({count_alerts()} total records) ---")
+        print(f"{'TIME':<20} {'ID':<10} {'TYPE':<10} {'LOCATION':<15} {'STATUS':<10} {'MESSAGE'}")
+        print("-" * 80)
+        for a in alerts:
+            short_id = str(a['id'])[:8]
+            print(f"{a['created_at']:<20} {short_id:<10} {a['type']:<10} {a['location']:<15} {a['status']:<10} {a['message']}")
+
+        anomalies = get_recent_anomalies(limit=10)
+        print(f"\n--- Table: anomalies ({count_anomalies()} total records) ---")
+        print(f"{'TIME':<20} {'SEVERITY':<10} {'TYPE':<22} {'REASON'}")
+        print("-" * 80)
+        for an in anomalies:
+            print(f"{an['timestamp']:<20} {an['severity']:<10} {an['type']:<22} {an['reason']}")
+        print()

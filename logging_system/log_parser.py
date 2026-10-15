@@ -173,7 +173,7 @@ def parse_log_file(path: Optional[str] = None) -> List[LogEntry]:
     """
     if path is None:
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        path = os.path.join(project_root, "logs", "app.log")
+        path = os.environ.get("ALERT_LOG_PATH", os.path.join(project_root, "logs", "app.log"))
 
     if not os.path.isfile(path):
         return []

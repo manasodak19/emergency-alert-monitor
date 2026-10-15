@@ -14,8 +14,12 @@ import os
 
 # ─── Build the logger once ───────────────────────────────────────────────────
 
-LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
-LOG_FILE = os.path.join(LOG_DIR, "app.log")
+_DEFAULT_LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
+LOG_FILE = os.environ.get(
+    "ALERT_LOG_PATH",
+    os.path.join(_DEFAULT_LOG_DIR, "app.log"),
+)
+LOG_DIR = os.path.dirname(os.path.abspath(LOG_FILE))
 
 # Ensure the logs/ directory exists at import time
 os.makedirs(LOG_DIR, exist_ok=True)
