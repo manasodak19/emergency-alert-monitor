@@ -15,6 +15,13 @@ DATABASE_PATH = os.environ.get(
 )
 DB_FAILURE_SIM_SECONDS = 60
 
+# Log monitoring configuration
+ENABLE_LOG_WATCHER = os.environ.get("ENABLE_LOG_WATCHER", "0").lower() in ("1", "true", "yes")
+LOG_PATH = os.environ.get(
+    "ALERT_LOG_PATH",
+    os.path.join(_PROJECT_ROOT, "logs", "app.log"),
+)
+
 THRESHOLDS = {
     "database_error_count": {
         "normal_max": 5,

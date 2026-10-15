@@ -1,0 +1,53 @@
+# Version control
+.git/
+.gitignore
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Testing & coverage artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# Local logs and runtime database (excluded so image starts clean)
+logs/*.log
+logs/*.log.*
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+*.log
+
+# Environment variables and secrets
+.env
+.env.*
+*.env
+
+# IDE and OS metadata
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# CI and local backup files
+*.local_backup
+app_smoke.log
+
+# Docker configuration files (not needed inside the application container)
+docker/
+compose.yaml
+

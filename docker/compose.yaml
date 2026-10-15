@@ -1,0 +1,108 @@
+# =============================================================================
+# Phase 12 — Docker Compose (Nginx + Flask)
+# Emergency Alert Monitor: Automated Log Monitoring and Anomaly Detection
+#
+# Services:
+#   backend  — Flask application (built from ./Dockerfile)
+#   nginx    — Nginx reverse proxy (official stable image)
+#
+# Network:
+#   eam-net  — Internal bridge network. Only nginx exposes port 80 to host.
+#              The Flask port 5000 is never published to the host.
+#
+# Volumes:
+#   eam_data — Persists the SQLite database across container restarts.
+#   eam_logs — Persists application logs across container restarts.
+# =============================================================================
+
+name: emergency-alert-monitor
+
+services:
+
+  # ── Flask backend ──────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/backend/Dockerfile
+    image: emergency-alert-monitor:local
+    container_name: eam-backend
+    restart: unless-stopped
+
+    # Environment variables — override defaults from the Dockerfile as needed.
+    environment:
+      FLASK_DEBUG: "0"
+      FLASK_RUN_HOST: "0.0.0.0"
+      FLASK_RUN_PORT: "5000"
+      ALERT_DB_PATH: /app/data/alerts.db
+      ALERT_LOG_PATH: /app/logs/app.log
+      ENABLE_LOG_WATCHER: "0"
+
+    # Flask is only reachable on the internal network — not published to host.
+    expose:
+      - "5000"
+
+    # Persist SQLite database and application logs.
+    volumes:
+      - eam_data:/app/data
+      - eam_logs:/app/logs
+
+    networks:
+      - eam-net
+
+    # Health check: uses Python stdlib urllib to probe Flask /health.
+    # Nginx depends_on this service becoming healthy before starting.
+    healthcheck:
+      test: >
+        python -c
+        "import urllib.request;
+        urllib.request.urlopen('http://127.0.0.1:5000/health').read()"
+      interval: 5s
+      timeout: 3s
+      start_period: 3s
+      retries: 3
+
+  # ── Nginx reverse proxy ────────────────────────────────────────────────────
+  nginx:
+    image: nginx:stable-alpine
+    container_name: eam-nginx
+    restart: unless-stopped
+
+    # Port 80 on the host maps to port 80 inside the nginx container.
+    # Flask port 5000 is NOT published — traffic must go through Nginx.
+    ports:
+      - "80:80"
+
+    # Mount our custom nginx.conf (read-only for security).
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+
+    networks:
+      - eam-net
+
+    # Nginx starts only after the backend passes its health check.
+    depends_on:
+      backend:
+        condition: service_healthy
+
+    # Health check: tests Nginx itself via /nginx-health (not Flask).
+    healthcheck:
+      test: >
+        wget -qO- http://127.0.0.1/nginx-health ||
+        curl -fs http://127.0.0.1/nginx-health ||
+        exit 1
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+
+# ── Named volumes ──────────────────────────────────────────────────────────────
+volumes:
+  eam_data:
+    driver: local
+  eam_logs:
+    driver: local
+
+# ── Internal bridge network ────────────────────────────────────────────────────
+networks:
+  eam-net:
+    driver: bridge
