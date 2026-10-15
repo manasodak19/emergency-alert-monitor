@@ -94,21 +94,81 @@ jobs:
         if: steps.df.outputs.exists == 'true'
         run: docker build -f ${{ steps.df.outputs.path }} -t emergency-alert-monitor:ci .
 
-      - name: Run the container and check endpoints
+      - name: Start the Docker container
+        if: steps.df.outputs.exists == 'true'
+        run: docker run -d --name eam -p 5000:5000 emergency-alert-monitor:ci
+
+      - name: Wait for container to become healthy
         if: steps.df.outputs.exists == 'true'
         run: |
-          docker run -d --name eam -p 5000:5000 emergency-alert-monitor:ci
-          curl --fail --silent --show-error --retry 15 --retry-delay 2 --retry-connrefused http://127.0.0.1:5000/health
+          TIMEOUT=60
+          INTERVAL=2
+          ELAPSED=0
+          HEALTH_STATUS=""
+
+          while [ $ELAPSED -lt $TIMEOUT ]; do
+            STATE=$(docker inspect --format='{{.State.Status}}' eam 2>/dev/null || echo "not-found")
+            HEALTH_STATUS=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' eam 2>/dev/null || echo "unknown")
+
+            echo "Waiting for health ($ELAPSED/${TIMEOUT}s) - State: $STATE, Health: $HEALTH_STATUS"
+
+            if [ "$HEALTH_STATUS" = "healthy" ]; then
+              echo "Container is healthy and ready to accept requests."
+              break
+            fi
+
+            if [ "$STATE" = "exited" ] || [ "$STATE" = "dead" ] || [ "$HEALTH_STATUS" = "unhealthy" ]; then
+              echo "Container failed (State: $STATE, Health: $HEALTH_STATUS)"
+              break
+            fi
+
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+
+          if [ "$HEALTH_STATUS" != "healthy" ]; then
+            echo "Container failed to become healthy within ${TIMEOUT}s (status: $HEALTH_STATUS)"
+            echo "=== docker ps -a ==="
+            docker ps -a || true
+            echo "=== docker inspect eam ==="
+            docker inspect eam || true
+            echo "=== docker logs eam ==="
+            docker logs eam || true
+            exit 1
+          fi
+
+      - name: Check /health endpoint
+        if: steps.df.outputs.exists == 'true'
+        run: |
+          curl --fail --silent --show-error \
+            --retry 5 --retry-delay 1 --retry-all-errors \
+            http://127.0.0.1:5000/health
           echo
-          curl --fail --silent --show-error -X POST http://127.0.0.1:5000/alert \
+
+      - name: Check /alert endpoint (POST JSON)
+        if: steps.df.outputs.exists == 'true'
+        run: |
+          curl --fail --silent --show-error \
+            -X POST http://127.0.0.1:5000/alert \
             -H "Content-Type: application/json" \
             -d '{"type":"Flood","message":"Docker CI test","location":"Mumbai"}'
           echo
-          curl --fail --silent --show-error http://127.0.0.1:5000/api/status > /dev/null
 
-      - name: Show container logs if something failed
+      - name: Check /api/status endpoint
+        if: steps.df.outputs.exists == 'true'
+        run: |
+          curl --fail --silent --show-error http://127.0.0.1:5000/api/status > /dev/null
+          echo
+
+      - name: Show container diagnostics if something failed
         if: failure() && steps.df.outputs.exists == 'true'
-        run: docker logs eam || true
+        run: |
+          echo "=== docker ps -a ==="
+          docker ps -a || true
+          echo "=== docker inspect eam ==="
+          docker inspect eam || true
+          echo "=== docker logs eam ==="
+          docker logs eam || true
 
       - name: Stop and remove container
         if: always() && steps.df.outputs.exists == 'true'
